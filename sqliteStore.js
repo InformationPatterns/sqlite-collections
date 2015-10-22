@@ -1,11 +1,14 @@
 sqliteStore = function (collection) {
   this.beginUpdate = (batchSize, reset) => {
-    if (batchSize > 1 || reset)
-      collection._collection.pauseObservers();
 
-    if (reset)
-      collection._clearCashe()
+    if (batchSize > 1 || reset) {
+      collection._collection.pauseObservers();
+    }
+
+    if (reset) {
+      collection._clearCashe();
       collection._collection.remove({});
+    }
   }
 
   this.update = function (msg) {
@@ -46,17 +49,14 @@ sqliteStore = function (collection) {
   // Called around method stub invocations to capture the original versions
   // of modified documents.
   this.saveOriginals = function () {
-    console.log('saveOriginals')
-    // collection._collection.saveOriginals();
+    collection._collection.saveOriginals();
   }
   this.retrieveOriginals  = function () {
-    console.log('retrieveOriginals')
-    // return collection._collection.retrieveOriginals();
+    return collection._collection.retrieveOriginals();
   }
 
   // Used to preserve current versions of documents across a store reset.
   this.getDoc = (id) => {
-    console.log('getDoc')
     return collection.sqlite.findOne(id);
   }
 

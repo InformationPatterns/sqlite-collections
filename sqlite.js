@@ -21,7 +21,7 @@ SQLiteTable = class SQLiteTable {
     this.keys = {
       INSERT: 0,
       UPDATE: 1,
-      REMOVE: 3
+      REMOVE: 2
     };
 
 
@@ -88,7 +88,7 @@ SQLiteTable = class SQLiteTable {
 
   remove(id) {
     return new Promise( (resolve, reject) => {
-      if (!_.isString(id) || id.length < 1 ) { reject('invalid id'); return; }
+      if (!_.isString(id) || id.length == 0 ) { reject('invalid id'); return; }
       this.ready.then( () => {
         this.db.transaction( (t) => {
           t.executeSql(`DELETE FROM ${this.name} WHERE id = ?;`, [id], (t,r) => {resolve(r)});

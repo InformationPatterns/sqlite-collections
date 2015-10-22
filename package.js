@@ -24,8 +24,10 @@ Package.onUse(function (api) {
   api.use([
     'tracker', 
     'underscore',
-    'diff-sequence', 
+    // 'diff-sequence', 
     'mongo-id', 
+    'minimongo',
+    'random',
     'raix:localforage-serializer@1.2.4-rc.1'
   ], 'web.cordova');
   api.addFiles([
@@ -34,7 +36,5 @@ Package.onUse(function (api) {
     'collections.js'
   ], 'web.cordova');
 
-  api.export('SQLite');
-  api.export('sqliteStore');
-  
+  api.export('SQLite');  
 });
