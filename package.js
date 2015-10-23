@@ -24,11 +24,11 @@ Package.onUse(function (api) {
   api.use([
     'tracker', 
     'underscore',
-    // 'diff-sequence', 
     'mongo-id', 
     'minimongo',
     'random',
-    'raix:localforage-serializer@1.2.4-rc.1'
+    'ejson',
+    'nunohvidal:lz-string@1.3.3'
   ], 'web.cordova');
   api.addFiles([
     'sqliteStore.js',

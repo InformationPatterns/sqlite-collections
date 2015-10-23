@@ -62,26 +62,23 @@ SQLiteTable = class SQLiteTable {
         //cast all false values to null for clean db transactions
         if (!item.doc) { item.doc = null; }
         if (!item.filter) { item.filter = null; }
-        serializer.serialize(item.doc, (value, e) => {
-          if (e) { reject(e); return; }
-          this.db.transaction( (t) => {
-            if (clientChange) {
-              if (updateQuery) {
-                serializer.serialize(updateQuery, (updateDoc) => {
-                  t.executeSql(` INSERT INTO ${this.name}_server_sync (key, value, type) VALUES (?, ?, ?)`, 
-                    [item.id, updateDoc, this.keys.UPDATE]);
-                });
-              } else {
-                t.executeSql(` INSERT INTO ${this.name}_server_sync (key, value, type) VALUES (?, ?, ?)`, 
-                  [item.id, value, this.keys.INSERT]);
-              }
+        compressedDoc = SQLiteTable.compress(item.doc)
+        this.db.transaction( (t) => {
+          if (clientChange) {
+            if (updateQuery) {
+              compressedUpdate = SQLiteTable.compress(updateQuery)
+              t.executeSql(` INSERT INTO ${this.name}_server_sync (key, value, type) VALUES (?, ?, ?)`, 
+                [item.id, compressedUpdate, this.keys.UPDATE]);
+            } else {
+              t.executeSql(` INSERT INTO ${this.name}_server_sync (key, value, type) VALUES (?, ?, ?)`, 
+                [item.id, compressedDoc, this.keys.INSERT]);
             }
-            t.executeSql(`INSERT OR REPLACE INTO ${this.name} (id, value, filter) VALUES (?, ?, ?);`,  
-              [ item.id, value, item.filter ], 
-              () => { resolve( item ); }
-            );
-          }, reject);
-        });
+          }
+          t.executeSql(`INSERT OR REPLACE INTO ${this.name} (id, value, filter) VALUES (?, ?, ?);`,  
+            [ item.id, compressedDoc, item.filter ], 
+            () => { resolve( item ); }
+          );
+        }, reject);
       }).catch(reject);
     });
   }
@@ -91,7 +88,7 @@ SQLiteTable = class SQLiteTable {
       if (!_.isString(id) || id.length == 0 ) { reject('invalid id'); return; }
       this.ready.then( () => {
         this.db.transaction( (t) => {
-          t.executeSql(`DELETE FROM ${this.name} WHERE id = ?;`, [id], (t,r) => {resolve(r)});
+          t.executeSql(`DELETE FROM ${this.name} WHERE id = ?`, [id], (t,r) => {resolve(r)});
           t.executeSql(`INSERT INTO ${this.name}_server_sync (key, type) VALUES (?, ?)`, [id,this.keys.REMOVE]);
         }, reject);
       }).catch(reject);
@@ -100,26 +97,18 @@ SQLiteTable = class SQLiteTable {
 
   findOne(id) {
     return new Promise( (resolve, reject) => {
-      var where; //if id is not a string find a random one (usually for debugging)
-      if (_.isString(id)) {
-        if (id.length < 1 ) { reject('invalid id'); return; } else {
-          where = 'WHERE id = ?'
-        }
-      } 
+      if (!_.isString(id) || id.length < 1) { reject('invalid id'); return; }
       this.ready.then(() => {
         this.db.transaction( (t) => {
-          this.db.executeSql(
-            `SELECT * FROM ${this.name} ${where} LIMIT 1`, 
-            [id],
-            (results) => {
-              var result = null;
-              if (results.rows.length) {
-                result = serializer.deserialize(results.rows.item(0).value);
-                result._id = results.rows.item(0).id;
-              }
-              resolve(result);
+          t.executeSql(`SELECT * FROM ${this.name} WHERE id = ? LIMIT 1`, [id], (t, results) => {
+            var result = null;
+            if (results.rows.length) {
+              item = results.rows.item(0)
+              result = SQLiteTable.decompress(item.value);
+              result._id = item.id;
             }
-          );
+            resolve(result);
+          });
         }, reject);
       }).catch(reject);
     });
@@ -142,7 +131,7 @@ SQLiteTable = class SQLiteTable {
             (t, results) => {
               result = []
               for (let i = results.rows.length - 1; i >= 0; i--) {
-                item = serializer.deserialize(results.rows.item(i).value);
+                item = SQLiteTable.decompress(results.rows.item(i).value);
                 item._id = results.rows.item(i).id
                 result.push(item);
               };
@@ -164,7 +153,7 @@ SQLiteTable = class SQLiteTable {
               result = []
               for (let i = results.rows.length - 1; i >= 0; i--) {
                 let value = results.rows.item(i).value;
-                if (value) { value = serializer.deserialize(value); }
+                if (value) { value = SQLiteTable.decompress(value); }
                 result.push({
                   value: value,
                   key: results.rows.item(i).key
@@ -183,7 +172,7 @@ SQLiteTable = class SQLiteTable {
       if (!_.isString(id) || id.length < 1 ) { reject('invalid id'); return; }
       this.ready.then( () => {
         this.db.transaction( (t) => {
-          t.executeSql(`DELETE FROM ${this.name}_server_sync WHERE key = ?;`, [id], (t,r) => {resolve(r)});
+          t.executeSql(`DELETE FROM ${this.name}_server_sync WHERE key = ?`, [id], (t,r) => {resolve(r)});
         }, reject);
       }).catch(reject);
     });
@@ -230,4 +219,12 @@ SQLiteTable = class SQLiteTable {
       }).catch(reject);
     });
   }
+}
+
+SQLiteTable.compress = function (doc) {
+  return LZString.compress(EJSON.stringify(doc))
+}
+
+SQLiteTable.decompress = function (compressedDoc) {
+  return EJSON.parse(LZString.decompress(compressedDoc))
 }
