@@ -196,6 +196,22 @@ SQLiteTable = class SQLiteTable {
       }).catch(reject);
     });
   }
+  countByFilter(filter) {
+    if (filter) {
+      var query = 'filter = ?'
+    } else {
+      var query = 'filter is null'
+    }
+    return new Promise( (resolve, reject) => {
+      this.ready.then(() => {
+        this.db.transaction( (t) => {
+          t.executeSql( `SELECT COUNT(*) as c FROM ${this.name} WHERE ${query}`, [filter],
+            (t, results) => { resolve(results.rows.item(0).c); } 
+          );
+        }, reject);
+      }).catch(reject);
+    });
+  }
 
   clear(clean) {
     return new Promise( (resolve, reject) => {

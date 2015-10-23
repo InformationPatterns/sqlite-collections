@@ -232,24 +232,42 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
     filter = this._userFilter && this._userFilter(doc);
     return filter ? filter : null; 
   }
-  addFilter(filter) {
-    if (this._currentFilters.indexOf(filter) == -1) {
-      this._currentFilters.push(filter);
-      this._collection.pauseObservers();
-      this._updateFilters().then(() => {
-        this._collection.resumeObservers();
-      });
-    }
+  addFilter(filter, wipe) {
+    return new Promise( (resolve, reject) => {
+      try {
+        if (this._currentFilters.indexOf(filter) == -1 || wipe) {
+          if (wipe) {
+            this._currentFilters = [filter];
+          } else {
+            this._currentFilters.push(filter);
+          }
+          this._collection.pauseObservers();
+          this._updateFilters().then(() => {
+            this._collection.resumeObservers();
+            resolve();
+          }).catch(reject);
+        } else { resolve(); }
+      } catch (e) { reject(e); }
+    });
   }
-  removeFilter(filter) {
-    index = this._currentFilters.indexOf(filter);
-    if (index != -1) {
-      this._currentFilters.splice(index, 1);
-      this._collection.pauseObservers();
-      this._updateFilters().then(() => {
-        this._collection.resumeObservers();
-      });
-    }
+  removeFilter(filter, wipe) {
+    return new Promise( (resolve, reject) => {
+      try {
+        index = this._currentFilters.indexOf(filter);
+        if (index != -1 || wipe) {
+          if (wipe) {
+            this._currentFilters = []
+          } else {
+            this._currentFilters.splice(index, 1);
+          }
+          this._collection.pauseObservers();
+          this._updateFilters().then(() => {
+            this._collection.resumeObservers();
+            resolve();
+          }).catch(reject);
+        } else { resolve(); }
+      } catch (e) { reject(e); }
+    });
   }
   _updateFilters() {
     return new Promise( (resolve, reject) => {
@@ -262,6 +280,17 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
   } 
 
   //helpers
+  count(filter) {
+    return new Promise( (resolve, reject) => { 
+      if (filter || _.isNull(filter)) {
+        this.sqlite.countByFilter(filter).then(resolve).catch(reject)
+      } else {
+        this.sqlite.count().then(resolve).catch(reject)
+      }
+    });
+  }
+
+  //_helpers
   _clearCashe() { 
     this.sqlite.clear(true) 
   }
@@ -286,7 +315,3 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
     }
   }
 }
-
-// TODOS
-// filter -> insert or update minimongo
-// clear data on reconnect
