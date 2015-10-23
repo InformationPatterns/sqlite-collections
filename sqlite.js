@@ -100,11 +100,16 @@ SQLiteTable = class SQLiteTable {
 
   findOne(id) {
     return new Promise( (resolve, reject) => {
-      if (!_.isString(id) || id.length < 1 ) { reject('invalid id'); return; }
+      var where; //if id is not a string find a random one (usually for debugging)
+      if (_.isString(id)) {
+        if (id.length < 1 ) { reject('invalid id'); return; } else {
+          where = 'WHERE id = ?'
+        }
+      } 
       this.ready.then(() => {
         this.db.transaction( (t) => {
           this.db.executeSql(
-            `SELECT * FROM ${this.name} WHERE id = ? LIMIT 1`, 
+            `SELECT * FROM ${this.name} ${where} LIMIT 1`, 
             [id],
             (results) => {
               var result = null;
