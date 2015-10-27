@@ -1,20 +1,3 @@
-/*
-* Based on https://github.com/raix/Meteor-localforage-sqlite/blob/master/sqlite.js
-* Copyright (c) 2013 @raix, aka Morten N.O. Nørgaard Henriksen, mh@gi-software.com
-* Licensed under The MIT License (MIT)
-*
-* ----------------------------------------
-*
-* (Could) include code from:
-*
-* base64-arraybuffer
-* https://github.com/niklasvh/base64-arraybuffer
-*
-* Copyright (c) 2012 Niklas von Hertzen
-* Licensed under the MIT license.
-*
-*/
-
 SQLiteTable = class SQLiteTable {
   constructor(name) {
     this.name = name;
@@ -64,6 +47,7 @@ SQLiteTable = class SQLiteTable {
         if (!item.filter) { item.filter = null; }
         compressedDoc = SQLiteTable.compress(item.doc)
         this.db.transaction( (t) => {
+          // console.log(this.name, item, clientChange, updateQuery);
           if (clientChange) {
             if (updateQuery) {
               compressedUpdate = SQLiteTable.compress(updateQuery)
@@ -74,6 +58,7 @@ SQLiteTable = class SQLiteTable {
                 [item.id, compressedDoc, this.keys.INSERT]);
             }
           }
+          // console.log(this.name, LZString.decompressFromUTF16(compressedDoc));
           t.executeSql(`INSERT OR REPLACE INTO ${this.name} (id, value, filter) VALUES (?, ?, ?);`,  
             [ item.id, compressedDoc, item.filter ], 
             () => { resolve( item ); }
@@ -222,9 +207,9 @@ SQLiteTable = class SQLiteTable {
 }
 
 SQLiteTable.compress = function (doc) {
-  return LZString.compress(EJSON.stringify(doc))
+  return LZString.compressToUTF16(EJSON.stringify(doc));
 }
 
 SQLiteTable.decompress = function (compressedDoc) {
-  return EJSON.parse(LZString.decompress(compressedDoc))
+  return EJSON.parse(LZString.decompressFromUTF16(compressedDoc));
 }

@@ -1,12 +1,12 @@
-/*
-*
-* Based on https://github.com/GroundMeteor/db/tree/es2015-localforage
-* Copyright (c) 2013 @raix, aka Morten N.O. Nørgaard Henriksen, mh@gi-software.com
-* Licensed under The MIT License (MIT)
-*
-*/
+SQLite = {
+  _collections: [],
+  ready: function () {
+    return _.all(SQLite._collections, function (col) {
+      return col.ready.get();
+    });
+  }
+}; //Global handle
 
-SQLite = {}; //Global handle
 SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
 
   constructor(name, options) {
@@ -20,8 +20,8 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
     this.ready = ReactiveVar(false);
     this._currentFilters = []
     this._userFilter = options && options.filter
-
-    if ( !Meteor.connection.registerStore(name, new sqliteStore(this)) ) { 
+    this._store = new sqliteStore(this);
+    if ( !Meteor.connection.registerStore(name, this._store) ) { 
       throw new Error(`There is already a collection named "${name}"`); 
     }
 
@@ -32,34 +32,25 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
 
     //add all the docs that pass the filter when ready
     this._collection.pauseObservers();
+    this.testArray = []
     this.sqlite.ready.then(() => {
       this.sqlite.findByFilters(this._currentFilters).then((docs) => {
         _.each(docs, (doc) => { this._collection.insert(doc); });
         this._collection.resumeObservers();
-      });
+      })//.catch( (e) => { console.warn(`sqlite table "${this._serverName}": ` + e) });
       this._initialize();
 
-    }).catch( (e) => { console.warn(`sqlite table "${this._serverName}" failed to load`) });
+    })//.catch( (e) => { console.warn(`sqlite table "${this._serverName}" failed to load`) });
   }
 
   _initialize() {
     Tracker.autorun( (c) => {
       if (Meteor.status().connected) {
-        //if we are currently connected take the chance to upload
-        //since this is an autorun we will try again as soon as we reconnect
-        this._uploadAll().then(() => {
-          if (c.firstRun) { 
-            //we wait until the end of the next flush (effectually two flush from now)
-            //this will give time for any server Subscriptions to invalidate
-            //this way SQLite.ready and all subs.ready will only be true when everything is done
-            Tracker.afterFlush(() => {
-              //when everything has finished call ourselves ready
-              this.ready.set(true); 
-            }); 
-          }
-        })
-      } else {
-        if (c.firstRun) { this.ready.set(true); }
+        this._uploadAll();
+      }
+      if (c.firstRun) { 
+        this.ready.set(true); 
+        this._store.runInit();
       }
     });
   }
@@ -68,7 +59,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
   _added(id, doc) {
     if (!id) { return; }
     var result = this._addAndFilter(id, doc);
-    if (result.isPresent) {
+    if (result.isPresent && !this._collection._docs._map[id]) {
       this._collection.insert(_.extend({_id: id}, doc));
     }
   }
@@ -116,9 +107,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
 
     //we add the doc to SQLite here and try to upload it
     var result = this._addAndFilter(id, doc, true)
-    result.promise.then(() => { this._uploadInserts() }).catch(function (e) {
-      console.error(e); //log errors but don't kill the db
-    });
+    result.promise.then(() => { this._uploadInserts() })//.catch(function (e) { console.error(e); });
 
     //if it matched the current filters we add it now
     if (result.isPresent) { 
@@ -139,9 +128,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
 
       //we update SQLite, save the mutation object, and try to upload
       let result = this._addAndFilter(id, doc, true, arguments[1]);
-      result.promise.then(() => { this._uploadUpdates() }).catch(function (e) {
-        console.error(e); //log errors but don't kill the db
-      });
+      result.promise.then(() => { this._uploadUpdates() })//.catch(function (e) { console.error(e); });
     
       if (result.isPresent) { //the updated doc still passes the filter test
         //we could call apply and pass all the options but SQLite doesn't support them so...
@@ -162,9 +149,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
 
         //update/upload -- see above
         let result = this._addAndFilter(id, doc, true, arguments[1]);
-        result.promise.then(() => { this._uploadUpdates() }).catch(function (e) {
-          console.error(e); //log errors but don't kill the db
-        });
+        result.promise.then(() => { this._uploadUpdates() })//.catch(function (e) { console.error(e); });
 
         //the doc as become valid, we can do a direct insertion
         if (result.isPresent) { doc._id = id; this._collection.insert(doc); }
@@ -178,9 +163,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
     id = _.isString(arguments[0]) ? arguments[0] : arguments[0]._id;
 
     //remove doc from SQLite and try to upload removal request now
-    this.sqlite.remove(id).then(() => {  this._uploadRemoves() }).catch(function (e) {
-      console.error(e); //log errors but don't kill the db
-    });
+    this.sqlite.remove(id).then(() => {  this._uploadRemoves() })//.catch(function (e) { console.error(e); });
 
     return this._collection.remove(id);
   }
@@ -190,9 +173,10 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
 
   //SQLite to server
   _uploadAll() {
-    return this._uploadInserts().then(() => { this._uploadUpdates() }).then(() => { this._uploadRemoves() }).catch(function (e) {
-      console.error(e) //log errors but don't kill the db
-    });
+    return this._uploadInserts().then(() => { this._uploadUpdates() }).then(() => { this._uploadRemoves() })
+    // .catch(function (e) {
+    //   console.error(e) //log errors but don't kill the db
+    // });
   }
   _uploadInserts() {
     return new Promise( (resolve, reject) => {this._uploadRecursive(this.sqlite.keys.INSERT, resolve, reject) });
@@ -224,7 +208,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
       } else if (key == this.sqlite.keys.REMOVE) {
         this._connection.call(`/${this._serverName}/remove`, {_id: item.key}, done);
       } else { reject(`unknown key ${key}`) }
-    }).catch(reject);
+    })//.catch(reject);
   }
 
   //filters functions
@@ -234,39 +218,35 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
   }
   addFilter(filter, wipe) {
     return new Promise( (resolve, reject) => {
-      try {
-        if (this._currentFilters.indexOf(filter) == -1 || wipe) {
-          if (wipe) {
-            this._currentFilters = [filter];
-          } else {
-            this._currentFilters.push(filter);
-          }
-          this._collection.pauseObservers();
-          this._updateFilters().then(() => {
-            this._collection.resumeObservers();
-            resolve();
-          }).catch(reject);
-        } else { resolve(); }
-      } catch (e) { reject(e); }
+      if (this._currentFilters.indexOf(filter) == -1 || wipe) {
+        if (wipe) {
+          this._currentFilters = [filter];
+        } else {
+          this._currentFilters.push(filter);
+        }
+        this._collection.pauseObservers();
+        this._updateFilters().then(() => {
+          this._collection.resumeObservers();
+          resolve();
+        })//.catch(reject);
+      } else { resolve(); }
     });
   }
   removeFilter(filter, wipe) {
     return new Promise( (resolve, reject) => {
-      try {
-        index = this._currentFilters.indexOf(filter);
-        if (index != -1 || wipe) {
-          if (wipe) {
-            this._currentFilters = []
-          } else {
-            this._currentFilters.splice(index, 1);
-          }
-          this._collection.pauseObservers();
-          this._updateFilters().then(() => {
-            this._collection.resumeObservers();
-            resolve();
-          }).catch(reject);
-        } else { resolve(); }
-      } catch (e) { reject(e); }
+      index = this._currentFilters.indexOf(filter);
+      if (index != -1 || wipe) {
+        if (wipe) {
+          this._currentFilters = []
+        } else {
+          this._currentFilters.splice(index, 1);
+        }
+        this._collection.pauseObservers();
+        this._updateFilters().then(() => {
+          this._collection.resumeObservers();
+          resolve();
+        })//.catch(reject);
+      } else { resolve(); }
     });
   }
   _updateFilters() {
@@ -275,7 +255,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
         this._collection.remove({});
         _.each(docs, (doc) => { this._collection.insert(doc); });
         resolve()
-      }).catch(reject)
+      })//.catch(reject)
     });
   } 
 
@@ -283,9 +263,9 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
   count(filter) {
     return new Promise( (resolve, reject) => { 
       if (filter || _.isNull(filter)) {
-        this.sqlite.countByFilter(filter).then(resolve).catch(reject)
+        this.sqlite.countByFilter(filter).then(resolve)//.catch(reject)
       } else {
-        this.sqlite.count().then(resolve).catch(reject)
+        this.sqlite.count().then(resolve)//.catch(reject)
       }
     });
   }

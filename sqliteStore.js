@@ -1,4 +1,11 @@
 sqliteStore = function (collection) {
+  this.intiQueue = []
+  this.runInit = () => {
+    _.each(this.intiQueue, (msg) => {
+      this.update(msg)
+    });
+  }
+
   this.beginUpdate = (batchSize, reset) => {
 
     if (batchSize > 1 || reset) {
@@ -12,6 +19,11 @@ sqliteStore = function (collection) {
   }
 
   this.update = function (msg) {
+    if (!collection.ready.get()) {
+      this.intiQueue.push(msg)
+      return;
+    }
+    console.log(msg.collection, msg)
     var mongoId = MongoID.idParse(msg.id);
     collection.sqlite.findOne(mongoId).then( (doc) => {
       if (msg.msg === 'replace') {
