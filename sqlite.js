@@ -45,20 +45,20 @@ SQLiteTable = class SQLiteTable {
         //cast all false values to null for clean db transactions
         if (!item.doc) { item.doc = null; }
         if (!item.filter) { item.filter = null; }
-        compressedDoc = SQLiteTable.compress(item.doc)
+        let compressedDoc = SQLiteTable.compress(item.doc)
         this.db.transaction( (t) => {
           // console.log(this.name, item, clientChange, updateQuery);
           if (clientChange) {
             if (updateQuery) {
-              compressedUpdate = SQLiteTable.compress(updateQuery)
-              t.executeSql(` INSERT INTO ${this.name}_server_sync (key, value, type) VALUES (?, ?, ?)`, 
+              t.executeSql(`INSERT INTO ${this.name}_server_sync (key, value, type) VALUES (?, ?, ?)`, 
                 [item.id, compressedUpdate, this.keys.UPDATE]);
             } else {
-              t.executeSql(` INSERT INTO ${this.name}_server_sync (key, value, type) VALUES (?, ?, ?)`, 
+              t.executeSql(`INSERT INTO ${this.name}_server_sync (key, value, type) VALUES (?, ?, ?)`, 
                 [item.id, compressedDoc, this.keys.INSERT]);
             }
           }
-          // console.log(this.name, LZString.decompressFromUTF16(compressedDoc));
+
+          console.log(this.name, item.doc, `${compressedDoc}`);
           t.executeSql(`INSERT OR REPLACE INTO ${this.name} (id, value, filter) VALUES (?, ?, ?);`,  
             [ item.id, compressedDoc, item.filter ], 
             () => { resolve( item ); }
