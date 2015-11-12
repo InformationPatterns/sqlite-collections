@@ -227,7 +227,9 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
         this._collection.pauseObservers();
         this._updateFilters().then(() => {
           this._collection.resumeObservers();
-          resolve();
+          Tracker.afterFlush(function () {
+            resolve();
+          });
         })//.catch(reject);
       } else { resolve(); }
     });
