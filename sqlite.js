@@ -49,6 +49,7 @@ SQLiteTable = class SQLiteTable {
         this.db.transaction( (t) => {
           if (clientChange) {
             if (updateQuery) {
+              let compressedUpdate = SQLiteTable.compress(updateQuery)
               t.executeSql(`INSERT INTO ${this.name}_server_sync (key, value, type) VALUES (?, ?, ?)`, 
                 [item.id, compressedUpdate, this.keys.UPDATE]);
             } else {

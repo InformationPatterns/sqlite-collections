@@ -37,22 +37,20 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
       this.sqlite.findByFilters(this._currentFilters).then((docs) => {
         _.each(docs, (doc) => { this._collection.insert(doc); });
         this._collection.resumeObservers();
-      })//.catch( (e) => { console.warn(`sqlite table "${this._serverName}": ` + e) });
+      }).catch( (e) => { console.warn(`sqlite table "${this._serverName}": ` + e) });
       this._initialize();
 
-    })//.catch( (e) => { console.warn(`sqlite table "${this._serverName}" failed to load`) });
+    }).catch( (e) => { console.warn(`sqlite table "${this._serverName}" failed to load`) });
   }
 
   _initialize() {
-    Tracker.autorun( (c) => {
+    Tracker.autorun( () => {
       if (Meteor.status().connected) {
         this._uploadAll();
       }
-      if (c.firstRun) { 
-        this.ready.set(true); 
-        this._store.runInit();
-      }
     });
+    this.ready.set(true); 
+    this._store.runInit();
   }
 
   //server to SQLite and client
@@ -128,7 +126,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
 
       //we update SQLite, save the mutation object, and try to upload
       let result = this._addAndFilter(id, doc, true, arguments[1]);
-      result.promise.then(() => { this._uploadUpdates() })//.catch(function (e) { console.error(e); });
+      result.promise.then(() => { this._uploadUpdates() }).catch(function (e) { console.error(e); });
     
       if (result.isPresent) { //the updated doc still passes the filter test
         //we could call apply and pass all the options but SQLite doesn't support them so...
@@ -149,7 +147,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
 
         //update/upload -- see above
         let result = this._addAndFilter(id, doc, true, arguments[1]);
-        result.promise.then(() => { this._uploadUpdates() })//.catch(function (e) { console.error(e); });
+        result.promise.then(() => { this._uploadUpdates() }).catch(function (e) { console.error(e); });
 
         //the doc as become valid, we can do a direct insertion
         if (result.isPresent) { doc._id = id; this._collection.insert(doc); }
@@ -288,7 +286,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
     }
     return { 
       isPresent: isPresent, 
-      promise: this.sqlite.insert({id: id,doc: doc, filter: filter}, changed, isUpdate)
+      promise: this.sqlite.insert({id: id, doc: doc, filter: filter}, changed, isUpdate)
     };
   }
 
