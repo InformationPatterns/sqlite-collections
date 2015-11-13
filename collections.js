@@ -174,9 +174,9 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
   //SQLite to server
   _uploadAll() {
     return this._uploadInserts().then(() => { this._uploadUpdates() }).then(() => { this._uploadRemoves() })
-    // .catch(function (e) {
-    //   console.error(e) //log errors but don't kill the db
-    // });
+    .catch(function (e) {
+      console.error(e) //log errors but don't kill the db
+    });
   }
   _uploadInserts() {
     return new Promise( (resolve, reject) => {this._uploadRecursive(this.sqlite.keys.INSERT, resolve, reject) });
@@ -188,6 +188,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
     return new Promise( (resolve, reject) => {this._uploadRecursive(this.sqlite.keys.REMOVE, resolve, reject) });
   }
   _uploadRecursive(key, resolve, reject) {
+    if (!Meteor.status().connected) { return; }
     this.sqlite.getSyncDocs(key, 1).then((results) => {
       if (!results.length) { resolve(); return; }
       let item = results[0]
@@ -208,7 +209,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
       } else if (key == this.sqlite.keys.REMOVE) {
         this._connection.call(`/${this._serverName}/remove`, {_id: item.key}, done);
       } else { reject(`unknown key ${key}`) }
-    })//.catch(reject);
+    }).catch(reject);
   }
 
   //filters functions
@@ -230,7 +231,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
           Tracker.afterFlush(function () {
             resolve();
           });
-        })//.catch(reject);
+        }).catch(reject);
       } else { resolve(); }
     });
   }
@@ -246,8 +247,10 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
         this._collection.pauseObservers();
         this._updateFilters().then(() => {
           this._collection.resumeObservers();
-          resolve();
-        })//.catch(reject);
+          Tracker.afterFlush(function () {
+            resolve();
+          });
+        }).catch(reject);
       } else { resolve(); }
     });
   }
@@ -257,7 +260,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
         this._collection.remove({});
         _.each(docs, (doc) => { this._collection.insert(doc); });
         resolve()
-      })//.catch(reject)
+      }).catch(reject)
     });
   } 
 

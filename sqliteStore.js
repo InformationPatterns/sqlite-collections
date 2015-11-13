@@ -23,7 +23,6 @@ sqliteStore = function (collection) {
       this.intiQueue.push(msg)
       return;
     }
-    console.log(msg.collection, msg)
     var mongoId = MongoID.idParse(msg.id);
     collection.sqlite.findOne(mongoId).then( (doc) => {
       if (msg.msg === 'replace') {

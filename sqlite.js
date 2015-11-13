@@ -47,7 +47,6 @@ SQLiteTable = class SQLiteTable {
         if (!item.filter) { item.filter = null; }
         let compressedDoc = SQLiteTable.compress(item.doc)
         this.db.transaction( (t) => {
-          // console.log(this.name, item, clientChange, updateQuery);
           if (clientChange) {
             if (updateQuery) {
               t.executeSql(`INSERT INTO ${this.name}_server_sync (key, value, type) VALUES (?, ?, ?)`, 
@@ -57,8 +56,6 @@ SQLiteTable = class SQLiteTable {
                 [item.id, compressedDoc, this.keys.INSERT]);
             }
           }
-
-          console.log(this.name, item.doc, `${compressedDoc}`);
           t.executeSql(`INSERT OR REPLACE INTO ${this.name} (id, value, filter) VALUES (?, ?, ?);`,  
             [ item.id, compressedDoc, item.filter ], 
             () => { resolve( item ); }
