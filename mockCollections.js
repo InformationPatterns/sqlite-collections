@@ -10,7 +10,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
       var self = this;
       methods = {}
       methods[`/${name}/batchInsert`] = function (docs) {
-        if (!docs || !docs.length) { return; }
+        if (!docs || !docs.length) { return 0; }
         var userId = this.userId;
 
         docs.forEach(function (doc) {
@@ -29,6 +29,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
           }
           try { self.insert(doc); } catch (e) {} //there may be cases of duplicate _ids, just move on
         });    
+        return docs.length;
       }
       Meteor.methods(methods);
     }

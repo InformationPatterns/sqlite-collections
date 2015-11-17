@@ -18,6 +18,11 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
     this.sqlite = new SQLiteTable(name); //this takes asyc time, so do it first
     this._serverName = name; //keep a ref to our real name, so we can add/remove docs
     this.ready = ReactiveVar(false);
+    this.status = ReactiveVar({
+      count: 0,
+      total: 0,
+      ready: true
+    });
     this._currentFilters = []
     this._userFilter = options && options.filter
     this._store = new sqliteStore(this);
@@ -45,7 +50,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
 
   _initialize() {
     Tracker.autorun( () => {
-      if (Meteor.status().connected) {
+      if (Meteor.status().status === "connected") {
         this._uploadAll();
       }
     });
@@ -171,9 +176,21 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
 
   //SQLite to server
   _uploadAll() {
-    return this._uploadInserts().then(() => { this._uploadUpdates() }).then(() => { this._uploadRemoves() })
-    .catch(function (e) {
-      console.error(e) //log errors but don't kill the db
+    this.sqlite.count(`${this._serverName}_server_sync`).then((total) => {
+      if (total) {
+        this.status.set({ count: 0, total: total, ready: false })
+        this._uploadInserts(true).then(() => { 
+          this._uploadUpdates(true) 
+        }).then(() => { 
+          this._uploadRemoves(true) 
+        }).then(() => {
+          this.status.set({
+            count: 0,
+            total: 0,
+            ready: true
+          })
+        });
+      }
     });
   }
   _uploadInserts() {
@@ -190,7 +207,9 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
     this.sqlite.getSyncDocs(key).then((results) => {
       if (!results.length) { resolve(); return; }
       let done = (e, r) => {
-        console.log(e, r, key)
+        let status = this.status.get();
+        status.count = status.count + results.length;
+        this.status.set(status);
         this.sqlite.removeSyncDoc(key).then(() => {
           this._uploadRecursive(key, resolve, reject)
         }).catch(function (e) {
@@ -216,7 +235,6 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
         done();
         
       } else { reject(`unknown key ${key}`) }
-      console.log('end')
     }).catch(reject);
   }
 
