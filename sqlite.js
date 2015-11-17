@@ -33,7 +33,7 @@ SQLiteTable = class SQLiteTable {
         }
         this.db.transaction( (t) => {
           t.executeSql(`CREATE TABLE IF NOT EXISTS ${this.name} (id string primary key, value, filter)`, [], done)
-          t.executeSql(`CREATE TABLE IF NOT EXISTS ${this.name}_server_sync (id integer primary key, key, value, type integer)`, [], done)
+          t.executeSql(`CREATE TABLE IF NOT EXISTS ${this.name}_server_sync (id integer primary key, key, value, type integer, time integer)`, [], done)
         }, reject);
       }, false);
     });
@@ -48,13 +48,14 @@ SQLiteTable = class SQLiteTable {
         let compressedDoc = SQLiteTable.compress(item.doc)
         this.db.transaction( (t) => {
           if (clientChange) {
+            let time = new Date().valueOf();
             if (updateQuery) {
               let compressedUpdate = SQLiteTable.compress(updateQuery)
-              t.executeSql(`INSERT INTO ${this.name}_server_sync (key, value, type) VALUES (?, ?, ?)`, 
-                [item.id, compressedUpdate, this.keys.UPDATE]);
+              t.executeSql(`INSERT INTO ${this.name}_server_sync (key, value, type, time) VALUES (?, ?, ?, ?)`, 
+                [item.id, compressedUpdate, this.keys.UPDATE, time]);
             } else {
-              t.executeSql(`INSERT INTO ${this.name}_server_sync (key, value, type) VALUES (?, ?, ?)`, 
-                [item.id, compressedDoc, this.keys.INSERT]);
+              t.executeSql(`INSERT INTO ${this.name}_server_sync (key, value, type, time) VALUES (?, ?, ?, ?)`, 
+                [item.id, compressedDoc, this.keys.INSERT, time]);
             }
           }
           t.executeSql(`INSERT OR REPLACE INTO ${this.name} (id, value, filter) VALUES (?, ?, ?);`,  
@@ -70,9 +71,11 @@ SQLiteTable = class SQLiteTable {
     return new Promise( (resolve, reject) => {
       if (!_.isString(id) || id.length == 0 ) { reject('invalid id'); return; }
       this.ready.then( () => {
+        let time = new Date().valueOf();
         this.db.transaction( (t) => {
           t.executeSql(`DELETE FROM ${this.name} WHERE id = ?`, [id], (t,r) => {resolve(r)});
-          t.executeSql(`INSERT INTO ${this.name}_server_sync (key, type) VALUES (?, ?)`, [id,this.keys.REMOVE]);
+          t.executeSql(`INSERT INTO ${this.name}_server_sync (key, type, time) VALUES (?, ?, ?)`, 
+            [id, this.keys.REMOVE, time]);
         }, reject);
       }).catch(reject);
     });
@@ -112,7 +115,7 @@ SQLiteTable = class SQLiteTable {
         this.db.transaction( (t) => {
           t.executeSql(`SELECT * FROM ${this.name} WHERE filter IN (${filterString}) OR filter IS null`, [],
             (t, results) => {
-              result = []
+              let result = []
               for (let i = results.rows.length - 1; i >= 0; i--) {
                 item = SQLiteTable.decompress(results.rows.item(i).value);
                 item._id = results.rows.item(i).id
@@ -131,7 +134,7 @@ SQLiteTable = class SQLiteTable {
       limit = limit || 1000
       this.ready.then(() => {
         this.db.transaction( (t) => {
-          t.executeSql(`SELECT * FROM ${this.name}_server_sync WHERE type = ${type} LIMIT ${limit}`, [],
+          t.executeSql(`SELECT * FROM ${this.name}_server_sync WHERE type = ${type} ORDER BY time ASC LIMIT ${limit}`, [],
             (t, results) => {
               result = []
               for (let i = results.rows.length - 1; i >= 0; i--) {
@@ -150,12 +153,14 @@ SQLiteTable = class SQLiteTable {
     });
   }
 
-  removeSyncDoc(id) {
+  removeSyncDoc(type, limit) {
     return new Promise( (resolve, reject) => {
-      if (!_.isString(id) || id.length < 1 ) { reject('invalid id'); return; }
+      limit = limit || 1000
       this.ready.then( () => {
         this.db.transaction( (t) => {
-          t.executeSql(`DELETE FROM ${this.name}_server_sync WHERE key = ?`, [id], (t,r) => {resolve(r)});
+          t.executeSql(`DELETE FROM ${this.name}_server_sync WHERE ID in (
+            SELECT ID FROM ${this.name}_server_sync WHERE type = ${type} ORDER BY time ASC LIMIT ${limit})`, 
+            [], (t,r) => {resolve(r)});
         }, reject);
       }).catch(reject);
     });

@@ -187,26 +187,36 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
   }
   _uploadRecursive(key, resolve, reject) {
     if (!Meteor.status().connected) { return; }
-    this.sqlite.getSyncDocs(key, 1).then((results) => {
+    this.sqlite.getSyncDocs(key).then((results) => {
       if (!results.length) { resolve(); return; }
-      let item = results[0]
       let done = (e, r) => {
-        if (e && !e.error == 409) { // 409 means we already uploaded it
-          reject(e)
-        } else {
-          this.sqlite.removeSyncDoc(item.key).then(() => {
-            this._uploadRecursive(key, resolve, reject)
-          })
-        }
+        console.log(e, r, key)
+        this.sqlite.removeSyncDoc(key).then(() => {
+          this._uploadRecursive(key, resolve, reject)
+        }).catch(function (e) {
+          console.log(e)
+        })
       }
       if (key == this.sqlite.keys.INSERT) {
-        item.value._id = item.key
-        this._connection.call(`/${this._serverName}/insert`, item.value,  done);
+        let items = [];
+        _.each(results, (item) => {
+          item.value._id = item.key
+          items.push(item.value)
+        });
+        this._connection.call(`/${this._serverName}/batchInsert`, items, done);
       } else if (key == this.sqlite.keys.UPDATE) {
-        this._connection.call(`/${this._serverName}/update`, {_id: item.key}, item.value,  done);
+        _.each(results, (item) => {
+          this._connection.call(`/${this._serverName}/update`, {_id: item.key}, item.value);
+        });
+        done();
       } else if (key == this.sqlite.keys.REMOVE) {
-        this._connection.call(`/${this._serverName}/remove`, {_id: item.key}, done);
+        _.each(results, (item) => {
+          this._connection.call(`/${this._serverName}/remove`, {_id: item.key});
+        });
+        done();
+        
       } else { reject(`unknown key ${key}`) }
+      console.log('end')
     }).catch(reject);
   }
 
