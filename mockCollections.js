@@ -3,8 +3,13 @@ SQLite = {} //Global handle
 SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
   constructor(name, options) {
     super(name, options);
-    if (Meteor.client) {
+    if (Meteor.isClient) {
       this.ready = ReactiveVar(true);
+      this.status = ReactiveVar({
+        ready: true,
+        count: 0,
+        total: 0
+      });
     }
     if (Meteor.server) {
       var self = this;
