@@ -189,6 +189,7 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
             total: 0,
             ready: true
           })
+          if (this.onUploadDone) { this.onUploadDone() }
         });
       }
     });
