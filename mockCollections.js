@@ -11,9 +11,9 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
         total: 0
       });
     }
+    self.batchInsert = {}
     if (Meteor.server) {
       var self = this;
-      self.batchInsert = {}
       methods = {}
       methods[`/${name}/batchInsert`] = function (docs) {
         if (!docs || !docs.length) { return 0; }
