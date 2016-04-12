@@ -3,6 +3,7 @@ SQLite = {} //Global handle
 SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
   constructor(name, options) {
     super(name, options);
+    var self = this;
     if (Meteor.isClient) {
       this.ready = ReactiveVar(true);
       this.status = ReactiveVar({
@@ -13,7 +14,6 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
     }
     self.batchInsert = {}
     if (Meteor.server) {
-      var self = this;
       methods = {}
       methods[`/${name}/batchInsert`] = function (docs) {
         if (!docs || !docs.length) { return 0; }
@@ -26,7 +26,9 @@ SQLite.Collection = class SQLiteCollection extends Mongo.Collection {
               throw new Meteor.Error(403, "Access denied");
             }
           } 
-          try { self.insert(doc); } catch (e) {} //there may be cases of duplicate _ids, drop and just move on
+          try { self.insert(doc); } catch (e) {
+            console.log(e)
+          } //there may be cases of duplicate _ids, drop and just move on
         });
         return docs.length;
       }

@@ -1,6 +1,7 @@
 SQLiteTable = class SQLiteTable {
   constructor(name) {
     this.name = name;
+    self.batchInsert = {};
     this.keys = {
       INSERT: 0,
       UPDATE: 1,
